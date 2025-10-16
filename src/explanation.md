@@ -157,59 +157,61 @@ def contains(key):
 
 **Chosen**: LSM-Tree
 **Reasoning**:
-- ✅ **Write Performance**: Sequential writes to WAL + memtable
-- ✅ **Memory Efficiency**: Can handle datasets larger than RAM
-- ✅ **Crash Recovery**: Natural durability through WAL
-- ❌ **Read Amplification**: May need to check multiple levels
-- ❌ **Write Amplification**: Compaction rewrites data multiple times
+- **Write Performance**: Sequential writes to WAL + memtable
+- **Memory Efficiency**: Can handle datasets larger than RAM
+- **Crash Recovery**: Natural durability through WAL
+- **Read Amplification**: May need to check multiple levels
+- **Write Amplification**: Compaction rewrites data multiple times
 
 ### 2. Skip List vs B-Tree for MemTable
 
 **Chosen**: Skip List
 **Reasoning**:
-- ✅ **Simplicity**: Easier to implement and debug
-- ✅ **Memory Efficiency**: No parent pointers needed
-- ✅ **Concurrency**: Simpler lock-free read implementation
-- ❌ **Cache Performance**: Less cache-friendly than B-trees
-- ❌ **Memory Overhead**: Multiple forward pointers per node
+- **Simplicity**: Easier to implement and debug
+- **Memory Efficiency**: No parent pointers needed
+- **Concurrency**: Simpler lock-free read implementation
+- **Cache Performance**: Less cache-friendly than B-trees
+- **Memory Overhead**: Multiple forward pointers per node
 
-### 3. HTTP/REST vs Custom Binary Protocol
+### 3. HTTP/REST with JSON Bodies vs Custom Binary Protocol
 
-**Chosen**: HTTP/REST
+**Chosen**: HTTP/REST with JSON request bodies
 **Reasoning**:
-- ✅ **Simplicity**: Easy to test with curl/Postman
-- ✅ **Standardization**: Wide client support
-- ✅ **Debugging**: Human-readable requests/responses
-- ❌ **Performance**: Higher overhead than binary protocols
-- ❌ **Latency**: HTTP parsing adds latency
+- **Simplicity**: Easy to test with curl/Postman
+- **Standardization**: Wide client support and tooling
+- **Debugging**: Human-readable requests/responses
+- **Clean API**: JSON bodies provide structured, consistent interface
+- **No Encoding**: Direct text support without base64 complexity
+- **Performance**: Higher overhead than binary protocols
+- **Latency**: HTTP parsing adds latency
 
 ### 4. Size-Tiered vs Leveled Compaction
 
 **Chosen**: Size-Tiered
 **Reasoning**:
-- ✅ **Write Performance**: Less write amplification
-- ✅ **Simplicity**: Easier to implement and tune
-- ✅ **Memory Usage**: Lower memory requirements
-- ❌ **Read Performance**: More SSTables to check per read
-- ❌ **Space Amplification**: Higher space overhead
+- **Write Performance**: Less write amplification
+- **Simplicity**: Easier to implement and tune
+- **Memory Usage**: Lower memory requirements
+- **Read Performance**: More SSTables to check per read
+- **Space Amplification**: Higher space overhead
 
 ### 5. In-Memory vs On-Disk Bloom Filters
 
 **Chosen**: On-Disk (loaded on demand)
 **Reasoning**:
-- ✅ **Memory Efficiency**: Only load when needed
-- ✅ **Scalability**: Can handle many SSTables
-- ❌ **Latency**: Loading bloom filter adds I/O
-- ❌ **Complexity**: Need to manage bloom filter lifecycle
+- **Memory Efficiency**: Only load when needed
+- **Scalability**: Can handle many SSTables
+- **Latency**: Loading bloom filter adds I/O
+- **Complexity**: Need to manage bloom filter lifecycle
 
 ## Internal Data Flow
 
 ### Write Operation Flow
 
 ```
-1. Client Request (PUT /kv/key)
+1. Client Request (PUT /kv/put with JSON body)
    ↓
-2. HTTP Server validates request
+2. HTTP Server validates JSON request
    ↓
 3. LSM Engine.put(key, value)
    ↓
@@ -229,9 +231,9 @@ def contains(key):
 ### Read Operation Flow
 
 ```
-1. Client Request (GET /kv/key)
+1. Client Request (GET /kv/get with JSON body)
    ↓
-2. HTTP Server validates request
+2. HTTP Server validates JSON request
    ↓
 3. LSM Engine.get(key)
    ↓
@@ -397,11 +399,11 @@ SSTABLE_BLOOM_FILTER_FALSE_POSITIVE_RATE = 0.01  # 1%
 This LSM-Tree implementation provides a robust, high-performance key-value storage system that balances write performance, read performance, and durability. The design choices prioritize simplicity and reliability while maintaining competitive performance characteristics suitable for production workloads.
 
 The system successfully addresses all the specified requirements:
-- ✅ Low latency operations through optimized data structures
-- ✅ High throughput through LSM-Tree's write-optimized design
-- ✅ Large dataset support through multi-level storage
-- ✅ Crash recovery through comprehensive WAL implementation
-- ✅ Predictable performance through background compaction
+- Low latency operations through optimized data structures
+- High throughput through LSM-Tree's write-optimized design
+- Large dataset support through multi-level storage
+- Crash recovery through comprehensive WAL implementation
+- Predictable performance through background compaction
 
 The modular architecture allows for future enhancements such as replication, advanced compression, and more sophisticated compaction strategies while maintaining the core simplicity and reliability of the current implementation.
 
@@ -437,14 +439,25 @@ Size-tiered compaction with background threads:
 - **Duplicate Resolution**: Newest value wins during merge
 
 ### API Design
-RESTful HTTP API with base64 encoding:
-- **PUT /kv/{key}**: Store key-value pair
-- **GET /kv/{key}**: Retrieve value
-- **GET /kv/range**: Range scan with start/end parameters
-- **POST /kv/batch**: Batch operations
-- **DELETE /kv/{key}**: Delete key
-- **GET /health**: Health check
-- **GET /stats**: Detailed metrics
+RESTful HTTP API with JSON request bodies for clean, consistent interface:
+
+**Core Operations**:
+- **PUT /kv/put**: Store key-value pair (JSON body: {"key": "...", "value": "..."})
+- **GET /kv/get**: Retrieve value (JSON body: {"key": "..."})
+- **GET /kv/range**: Range scan (JSON body: {"start": "...", "end": "..."})
+- **POST /kv/batch**: Batch operations (JSON body: {"keys": [...], "values": [...]})
+- **DELETE /kv/delete**: Delete key (JSON body: {"key": "..."})
+
+**System Operations**:
+- **GET /health**: Health check endpoint
+- **GET /stats**: Detailed system metrics
+
+**Design Philosophy**:
+- All keys and values are treated as UTF-8 text strings
+- JSON request bodies provide structured, consistent interface
+- No base64 encoding required for plain text data
+- Automatic internal encoding to bytes for storage engine
+- Proper HTTP status codes and error messages
 
 ### Error Handling
 Comprehensive error handling throughout:
